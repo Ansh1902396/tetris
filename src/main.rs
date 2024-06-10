@@ -2,11 +2,12 @@ extern crate rand;
 extern crate sdl2;
 
 use sdl2::keyboard::Keycode;
+use sdl2::libc::YESEXPR;
 use sdl2::pixels::Color;
 use sdl2::{event::Event, rect::Rect};
 use std::f64::consts::E;
 use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::{self, Duration, SystemTime};
 
 use sdl2::render::{Canvas, Texture, TextureCreator};
 
@@ -360,6 +361,30 @@ impl Tetris {
         }
     }
 
+    fn create_new_tetrimino(&mut self) -> Tetrimino {
+        static mut PREV: u8 = 7;
+
+        let mut rand_nb = rand::random::<u8>() % 7;
+
+        if unsafe { PREV } == rand_nb {
+            rand_nb = rand::random::<u8>() % 7;
+        }
+
+        unsafe { PREV = rand_nb }
+
+        match rand_nb {
+            0 => TetriminoI::new(),
+            1 => TetriminoJ::new(),
+            2 => TetriminoL::new(),
+            3 => TetriminoO::new(),
+            4 => TetriminoS::new(),
+            5 => TetriminoZ::new(),
+            6 => TetriminoT::new(),
+            _ => unreachable!(),
+            
+        }
+    }
+    
     fn make_permanent(&mut self) {
         if let Some(ref mut piece) = self.current_piece {
             let mut shift_y = 0;
@@ -389,6 +414,10 @@ impl Tetris {
             self.check_lines();
             self.current_piece = None;
         }
+    }
+
+    fn update_score(&mut self , to_add : u32) { 
+        self.score += to_add;
     }
 }
 
@@ -453,6 +482,7 @@ fn handle_events(tetris : &mut Tetris , quit : &mut bool , timer : &mut SystemTi
 }
 
 
+
 fn create_texture_rect<'a>(
     canvas: &mut Canvas<Window>,
     texture_creator: &'a TextureCreator<WindowContext>,
@@ -476,66 +506,67 @@ fn create_texture_rect<'a>(
     }
 }
 
+fn print_game_information(tetris : & Tetris) {
+    println!("Game Over...."); 
+    println!("Score :    {}", tetris.score);
+    println!("Number of lines :    {}", tetris.nb_lines);
+    println!("Level :    {}", tetris.current_level);
+}
+
+
+
 fn main() {
     let sdl_context = sdl2::init().expect("SDL initialization failed");
 
-    let video_subsystem = sdl_context
-        .video()
-        .expect("Couldn't get SDL video_subsystem");
+   let mut tetris = Tetris::new(); 
 
-    let window = video_subsystem
-        .window("rust-sdl2 demo : Video", 800, 600)
-        .position_centered()
-        .opengl()
-        .build()
-        .expect("Failed to create window");
+   let mut timer = SystemTime::now();
 
-    let mut canvas = window
-        .into_canvas()
-        .target_texture()
-        .present_vsync()
-        .build()
-        .expect("Couldn't get window's canvas");
+   loop { 
+    if match timer.elapsed() { 
+        Ok(elapsed) => elapsed.as_secs() >= 1, 
+        Err(_) => false
+    }{
+        let mut make_permanent = false;
 
-    let texture_creator = canvas.texture_creator();
-    const TEXTURE_SIZE: u32 = 32;
-
-    let mut blue_square = create_texture_rect(
-        &mut canvas,
-        &texture_creator,
-        TextureColor::Blue,
-        TEXTURE_SIZE,
-    )
-    .expect("Failed to create a texture");
-
-    let mut event_pump = sdl_context
-        .event_pump()
-        .expect("Failed to get SDL event_pump");
-
-    'running: loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => {
-                    break 'running;
-                }
-                _ => {}
-            }
+        if let Some(ref mut piece) = tetris.current_piece { 
+            let x = piece.x;
+            let mut y = piece.y +1 ;
+            make_permanent = !piece.change_position(&tetris.game_map , x , y);
         }
-        canvas.set_draw_color(Color::RGB(0, 255, 0));
-        canvas.clear();
-        canvas
-            .copy(
-                &blue_square,
-                None,
-                Rect::new(0, 0, TEXTURE_SIZE, TEXTURE_SIZE),
-            )
-            .expect("Couldn't copy texture into window");
-        canvas.present();
 
-        sleep(Duration::new(0, 1_000_000_000u32 / 60))
+        if make_permanent { 
+            tetris.make_permanent()
+        }
+        timer = SystemTime::now()
     }
+
+    if tetris.current_piece.is_none() { 
+        let current_piece = tetris.create_new_tetrimino(); 
+
+        if !current_piece.test_position(&tetris.game_map) {
+            print_game_information(&tetris) ; 
+            break;
+        }
+
+        tetris.current_piece = Some(current_piece)  ;
+
+    }
+
+    let mut quit  = false ; 
+
+    if !handle_events(&mut tetris, &mut quit, &mut timer, event_pump)  {
+        if let Some(ref mut piece) = tetris.current_piece { 
+            //We will draw our current tetrimino
+        }
+    }
+
+    if quit { 
+        print_game_information(&tetris); 
+        break;
+    }
+
+
+    sleep(Duration::new(0, 1_000_000_000u32/60));
+   }
 }
