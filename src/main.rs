@@ -1,11 +1,12 @@
+extern crate rand;
 extern crate sdl2;
-extern crate rand ;
 
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::{event::Event, rect::Rect};
+use std::f64::consts::E;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use sdl2::render::{Canvas, Texture, TextureCreator};
 
@@ -27,12 +28,12 @@ struct Tetrimino {
     current_state: u8,
 }
 
-struct Tetris  { 
-    game_map : Vec<Vec<u8>> , 
-    current_level : u32 , 
-    score  : u32 , 
-    nb_lines : u32 , 
-    current_piece  : Option<Tetrimino>
+struct Tetris {
+    game_map: Vec<Vec<u8>>,
+    current_level: u32,
+    score: u32,
+    nb_lines: u32,
+    current_piece: Option<Tetrimino>,
 }
 
 trait TetriminoGenerator {
@@ -185,199 +186,271 @@ impl TetriminoGenerator for TetriminoS {
     }
 }
 
-
-struct TetriminoZ ;
+struct TetriminoZ;
 
 impl TetriminoGenerator for TetriminoZ {
     fn new() -> Tetrimino {
-        Tetrimino { 
-            states : vec![vec![vec![6, 6, 0, 0] ,
-                               vec![0, 6, 6, 0],
-                               vec![0, 0, 0, 0],
-                               vec![0, 0, 0, 0]] ,
-                            vec![vec![0, 0, 6, 0],
-                                vec![0, 6, 6, 0],
-                                vec![0, 6, 0, 0],
-                                vec![0, 0, 0, 0]],
-                           ],
-            x : 4 , 
-            y : 0 ,
-            current_state : 0
+        Tetrimino {
+            states: vec![
+                vec![
+                    vec![6, 6, 0, 0],
+                    vec![0, 6, 6, 0],
+                    vec![0, 0, 0, 0],
+                    vec![0, 0, 0, 0],
+                ],
+                vec![
+                    vec![0, 0, 6, 0],
+                    vec![0, 6, 6, 0],
+                    vec![0, 6, 0, 0],
+                    vec![0, 0, 0, 0],
+                ],
+            ],
+            x: 4,
+            y: 0,
+            current_state: 0,
         }
     }
 }
 
-struct TetriminoT ;
+struct TetriminoT;
 
 impl TetriminoGenerator for TetriminoT {
     fn new() -> Tetrimino {
-        Tetrimino { 
-            states : vec![vec![vec![7, 7, 7, 0] ,
-                               vec![0, 7, 0, 0],
-                               vec![0, 7, 0, 0],
-                               vec![0, 0, 0, 0]] ,
-                            vec![vec![0, 7, 0, 0],
-                                vec![0, 7, 0, 0],
-                                vec![7, 7, 0, 0],
-                                vec![0, 0, 0, 0]],
-                            vec![vec![0, 7, 0, 0],
-                                vec![7, 7, 7, 0],
-                                vec![0, 0, 0, 0],
-                                vec![0, 0, 0, 0]],
-                            vec![vec![0, 7, 0, 0],
-                                vec![0, 7, 7, 0],   
-                                vec![0, 7, 0, 0] ,
-                                vec![0, 0, 0, 0]]],
-            x : 4 , 
-            y : 0 ,
-            current_state : 0
+        Tetrimino {
+            states: vec![
+                vec![
+                    vec![7, 7, 7, 0],
+                    vec![0, 7, 0, 0],
+                    vec![0, 7, 0, 0],
+                    vec![0, 0, 0, 0],
+                ],
+                vec![
+                    vec![0, 7, 0, 0],
+                    vec![0, 7, 0, 0],
+                    vec![7, 7, 0, 0],
+                    vec![0, 0, 0, 0],
+                ],
+                vec![
+                    vec![0, 7, 0, 0],
+                    vec![7, 7, 7, 0],
+                    vec![0, 0, 0, 0],
+                    vec![0, 0, 0, 0],
+                ],
+                vec![
+                    vec![0, 7, 0, 0],
+                    vec![0, 7, 7, 0],
+                    vec![0, 7, 0, 0],
+                    vec![0, 0, 0, 0],
+                ],
+            ],
+            x: 4,
+            y: 0,
+            current_state: 0,
         }
     }
 }
 
+fn create_new_tetrimino() -> Tetrimino {
+    static mut PREV: u8 = 7;
+    let mut rand_nb = rand::random::<u8>() % 7;
 
-fn create_new_tetrimino() -> Tetrimino { 
-    static mut PREV:u8 =7;
-    let mut rand_nb = rand::random::<u8>() %7 ;
-
-    if unsafe {PREV} == rand_nb {
-        rand_nb = rand::random::<u8>() %7
+    if unsafe { PREV } == rand_nb {
+        rand_nb = rand::random::<u8>() % 7
     }
 
-    unsafe {PREV = rand_nb}
+    unsafe { PREV = rand_nb }
 
     match rand_nb {
         0 => TetriminoI::new(),
         1 => TetriminoJ::new(),
         2 => TetriminoL::new(),
-        3 => TetriminoO::new(), 
+        3 => TetriminoO::new(),
         4 => TetriminoS::new(),
         5 => TetriminoZ::new(),
         6 => TetriminoT::new(),
-        _=> unreachable!()
+        _ => unreachable!(),
     }
 }
 
-
 impl Tetrimino {
-    fn rotate (&mut self , game_map : &[Vec<u8>]) {
-        
-        let mut tmp_state = self.current_state + 1 ; 
+    fn rotate(&mut self, game_map: &[Vec<u8>]) {
+        let mut tmp_state = self.current_state + 1;
 
-        if tmp_state as usize >= self.states.len() { 
-            tmp_state = 0 ; 
+        if tmp_state as usize >= self.states.len() {
+            tmp_state = 0;
         }
 
-        let x_pos = [0 , -1 , 1 , -2 , 2 , -3]; 
+        let x_pos = [0, -1, 1, -2, 2, -3];
 
-        for x in x_pos.iter(){  
-            if self.test_position(game_map, tmp_state as usize, self.x + x, self.y ) == true { 
-                self.current_state = tmp_state ; 
-                self.x += *x ; 
+        for x in x_pos.iter() {
+            if self.test_position(game_map, tmp_state as usize, self.x + x, self.y) == true {
+                self.current_state = tmp_state;
+                self.x += *x;
                 break;
             }
         }
     }
 
-    fn test_position(&self , game_map : &[Vec<u8>] , temp_state :usize ,x :isize , y:usize) -> bool { 
+    fn test_position(&self, game_map: &[Vec<u8>], temp_state: usize, x: isize, y: usize) -> bool {
         for decal_y in 0..4 {
             for decal_x in 0..4 {
-                let x = x + decal_x ; 
-                
-                if self.states[temp_state][decal_y][decal_x as usize] != 0 && (
-                    y + decal_y >= game_map.len() || 
-                    x < 0 || 
-                    x as usize > game_map[y + decal_y].len() || 
-                    game_map[y + decal_y][x as usize] != 0
-                ) {
-                    return  false;
+                let x = x + decal_x;
+
+                if self.states[temp_state][decal_y][decal_x as usize] != 0
+                    && (y + decal_y >= game_map.len()
+                        || x < 0
+                        || x as usize > game_map[y + decal_y].len()
+                        || game_map[y + decal_y][x as usize] != 0)
+                {
+                    return false;
                 }
             }
         }
-        return  true;
+        return true;
     }
 
-    fn change_position (&mut self , game_map : &[Vec<u8>] , new_x  : isize , new_y  :usize) -> bool { 
-        if self.test_position(game_map , self.current_state as usize , new_x , new_y) == true {
-            self.x == new_x as isize ; 
-            self.y = new_y ;
+    fn change_position(&mut self, game_map: &[Vec<u8>], new_x: isize, new_y: usize) -> bool {
+        if self.test_position(game_map, self.current_state as usize, new_x, new_y) == true {
+            self.x == new_x as isize;
+            self.y = new_y;
             true
-        } else  { 
+        } else {
             false
         }
     }
 }
 
-impl Tetris { 
-    fn new() -> Tetris { 
-        let mut game_map = Vec::new(); 
-        
-        for _ in 0..16 { 
-            game_map.push(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); 
+impl Tetris {
+    fn new() -> Tetris {
+        let mut game_map = Vec::new();
+
+        for _ in 0..16 {
+            game_map.push(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
         }
-        Tetris{
-            game_map : game_map , 
-            current_level : 1 , 
-            score :0,
-            nb_lines : 0 , 
-            current_piece : None
+        Tetris {
+            game_map: game_map,
+            current_level: 1,
+            score: 0,
+            nb_lines: 0,
+            current_piece: None,
         }
     }
 
-  
+    fn check_lines(&mut self) {
+        let mut y = 0;
 
-    fn check_lines(&mut self){ 
-        let mut y = 0 ; 
+        while y < self.game_map.len() {
+            let mut complete = true;
 
-        while y < self.game_map.len() { 
-            let mut complete = true ; 
-
-            for x in &self.game_map[y] { 
-                if *x == 0 { 
-                    complete = false ; 
+            for x in &self.game_map[y] {
+                if *x == 0 {
+                    complete = false;
                     break;
                 }
-
             }
 
-            if complete == true { 
-                self.game_map.remove(y) ; 
-                y-= 1 ; 
+            if complete == true {
+                self.game_map.remove(y);
+                y -= 1;
             }
-            y+=1
+            y += 1
         }
-        while self.game_map.len() < 16 { 
+        while self.game_map.len() < 16 {
             self.game_map.insert(0, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
         }
-        
     }
 
-    fn make_permanent(&mut self) { 
-        if let Some(ref mut piece ) = self.current_piece { 
-            let mut shift_y = 0 ;
+    fn make_permanent(&mut self) {
+        if let Some(ref mut piece) = self.current_piece {
+            let mut shift_y = 0;
 
-            while shift_y < piece.states[piece.current_state as usize].len() && piece.y + shift_y < self.game_map.len() { 
-                let mut shift_x = 0 ; 
+            while shift_y < piece.states[piece.current_state as usize].len()
+                && piece.y + shift_y < self.game_map.len()
+            {
+                let mut shift_x = 0;
 
-                while shift_x < piece.states[piece.current_state as usize][shift_y].len()  && (
-                    piece.x + shift_x as isize)  < self.game_map[piece.y + shift_y].len() as isize { 
-                        if piece.states[piece.current_state as usize][shift_y][shift_x] != 0 { 
-                            let x  = piece.x + shift_x as isize ; 
+                while shift_x < piece.states[piece.current_state as usize][shift_y].len()
+                    && (piece.x + shift_x as isize)
+                        < self.game_map[piece.y + shift_y].len() as isize
+                {
+                    if piece.states[piece.current_state as usize][shift_y][shift_x] != 0 {
+                        let x = piece.x + shift_x as isize;
 
-                            self.game_map[piece.y + shift_y][x as usize] = piece.states[piece.current_state as usize][shift_y][shift_x] ; 
-                        }
-
-                        shift_x += 1 ; 
+                        self.game_map[piece.y + shift_y][x as usize] =
+                            piece.states[piece.current_state as usize][shift_y][shift_x];
                     }
 
-                    shift_y += 1
+                    shift_x += 1;
+                }
+
+                shift_y += 1
             }
-            
-            self.check_lines(); 
+
+            self.check_lines();
             self.current_piece = None;
         }
     }
-} 
+}
+
+
+fn handle_events(tetris : &mut Tetris , quit : &mut bool , timer : &mut SystemTime , event_pump : &mut sdl2::EventPump) -> bool { 
+    let mut make_permanent = false;
+
+    if let Some(ref mut piece) = tetris.current_piece { 
+        let mut tmp_x = piece.x; 
+        let mut tmp_y = piece.y;
+
+        for event in event_pump.poll_iter() { 
+            match event { 
+                Event::Quit { .. } | Event::KeyDown { keycode : Some(Keycode::Escape) , .. } => { 
+                    *quit = true;
+                    break;
+                }
+                Event::KeyDown{ keycode : Some(Keycode::Down) , .. } => { 
+                    *timer = SystemTime::now();
+                    tmp_y += 1;
+                }
+                Event::KeyDown{ keycode : Some(Keycode::Left) , .. } => { 
+                    tmp_x -= 1;
+                }
+                Event::KeyDown{ keycode : Some(Keycode::Right) , .. } => { 
+                    tmp_x += 1;
+                }
+                Event::KeyDown{ keycode : Some(Keycode::Up) , .. } => { 
+                    piece.rotate(&tetris.game_map);
+                }
+                Event::KeyDown { keycode : Some(Keycode::Space) , .. } => { 
+                  let x = piece.x;
+
+                  let mut y = piece.y;
+
+                    while piece.change_position(&tetris.game_map , x , y) == true { 
+                        y += 1;
+                    }
+
+                    make_permanent = true;
+                }
+
+                _ => {}
+            }
+
+        }
+        if !make_permanent { 
+            if piece.change_position(&tetris.game_map, tmp_x, tmp_y) == false && tmp_y != piece.y {
+                make_permanent = true;
+            }
+        }
+
+        if make_permanent { 
+            tetris.make_permanent();
+            *timer = SystemTime::now();
+        }
+        
+    }   
+
+    make_permanent 
+    
+}
 
 
 fn create_texture_rect<'a>(
