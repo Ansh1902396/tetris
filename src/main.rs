@@ -5,7 +5,7 @@ use core::num;
 use sdl2::keyboard::Keycode;
 use sdl2::libc::YESEXPR;
 use sdl2::pixels::Color;
-use sdl2::timer;
+use sdl2::{surface, timer};
 use sdl2::{event::Event, rect::Rect};
 use std::f64::consts::E;
 use std::fs::File;
@@ -682,8 +682,25 @@ fn is_time_over(tetris: &Tetris, timer: &SystemTime) -> bool {
     }
 }
 
+fn create_texture_from_text <'a> (texture_creator: &'a TextureCreator<WindowContext>
+ , font :  &sdl2::ttf::Font , 
+    text : &str , 
+    r : u8 , 
+    g : u8 , 
+    b : u8) -> Option<Texture<'a>> {
+
+        if let Ok(surface) = font.render(text).blended(Color::RGB(r, g, b)) {
+            texture_creator.create_texture_from_surface(&surface).ok()
+        }else {
+            None
+        }
+    }
+
 fn main() {
     let sdl_context = sdl2::init().expect("SDL initialization failed");
+    let ttf_context = sdl2::ttf::init().expect("SDL TTF initialization failed");
+
+    let font = ttf_context.load_font("assets/lucida.ttf", 128).expect("Couldn't load the font ") ;
 
     let video_subsystem = sdl_context.video().expect("Couldn't get SDL subsystem ");
 
@@ -762,6 +779,10 @@ fn main() {
         texture!(39, 218, 225),
         texture!(45, 216, 47),
     ];
+
+    let rendered_text = create_texture_from_text(&texture_creator, &font, "Rudddy", 255, 255, 255).expect("Cannot render text");
+
+    canvas.copy(&rendered_text, None, Some(Rect::new(width as i32 - 40 , 0 , 40 , 30))).expect("Couldn't copy text ");
 
     loop {
         if is_time_over(&tetris, &timer) {

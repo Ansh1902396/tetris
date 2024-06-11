@@ -7,3 +7,6 @@ edition = "2021"
 sdl2 = { git = "https://github.com/Rust-SDL2/rust-sdl2" }
 rand = "0.3"
 
+
+[features]
+default = ["sdl2/ttf"]
